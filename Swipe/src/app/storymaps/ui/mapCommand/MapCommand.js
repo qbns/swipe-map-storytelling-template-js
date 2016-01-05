@@ -5,9 +5,10 @@ define([
 		"esri/symbols/PictureMarkerSymbol",
 		"esri/layers/GraphicsLayer",
 		"esri/graphic",
-		"esri/config"
+		"esri/config",
+		"../../service/LocationService"
 	],
-	function(has, Point, on, PictureMarkerSymbol, GraphicsLayer, Graphic, esriConfig)
+	function(has, Point, on, PictureMarkerSymbol, GraphicsLayer, Graphic, esriConfig, LocationService)
 	{
 		/**
 		 * MapCommand
@@ -25,6 +26,8 @@ define([
 			var homeButton = $('<div class="esriSimpleSliderIncrementButton"><div class="mapCommandHomeBtn"></div></div>');
 			var locateSymbol = new PictureMarkerSymbol('resources/icons/mapcommand-location-marker.png', 21, 21);
 			var locateLayer = new GraphicsLayer({id: 'locateLayer'});
+			var currentLocation = [];
+			var locationService = LocationService.getInstance();
 
 			homeButton.fastClick(function(){
 				// Prevent using the home button while it's spinning
@@ -91,31 +94,30 @@ define([
 				}
 			}
 
-			function getDeviceLocation()
-			{
-				navigator.geolocation.getCurrentPosition(
-					function(e) {
-						var geom = new Point(e.coords.longitude, e.coords.latitude);
+			function getDeviceLocation(){
+				if (!locationService.active) {
+					return;
+				}
 
-						// User callback
-						if ( locationButtonCallback && typeof locationButtonCallback == 'function' )
-							locationButtonCallback(true, geom, e);
+				var position = locationService.currentPosition;
+				var geom = new Point(position.longitude, position.latitude);
 
-						if ( map.spatialReference.wkid != 102100 && map.spatialReference.wkid != 4326 ) {
-							esriConfig.defaults.geometryService.project([geom], map.spatialReference, function(features){
-								if( ! features || ! features[0] )
-									return;
-
-								displayLocationPin(features[0]);
-							});
+				// User callback
+				if ( locationButtonCallback && typeof locationButtonCallback == 'function' )
+					locationButtonCallback(true, geom);
+				
+				if ( map.spatialReference.wkid != 4326 ) {
+					esriConfig.defaults.geometryService.project([geom], map.spatialReference, function(features){
+						if( ! features || ! features[0] )
 							return;
-						}
-						else
-							displayLocationPin(geom);
-					},
-					getDeviceLocationError,
-					{ timeout: 2000 }
-				);
+
+						displayLocationPin(features[0]);
+					});
+					return;
+				}
+				else
+					displayLocationPin(geom);				
+
 			}
 
 			function displayLocationPin(point)
@@ -139,6 +141,9 @@ define([
 				$(".esriSimpleSlider", map.container).after('<div id="mainMap_zoom_location" class="esriSimpleSlider esriSimpleSliderVertical mapCommandLocation"><div><img src="resources/icons/mapcommand-location.png"></div></div>');
 				$("#mainMap_zoom_location div", map.container).fastClick(getDeviceLocation);
 				this.enableLocationButton(locationButtonEnabled);
+				if (!locationService.active) {
+					locationService.start();
+				}
 				map.addLayer(locateLayer);
 			}
 
